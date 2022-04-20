@@ -17,6 +17,21 @@ function compose(...funcs) {
   });
   return res;
 }
+{
+  /*
+
+
+ next is a crashReport function as argument to the loggerDispatch function
+ function loggerDispatch(next) {
+    return function loggerAction(action) {
+      console.log('dispatching:', action);
+      let res = next(action);
+      return res;
+    };
+  };
+
+*/
+}
 
 function createStore(reducer, preloadState, enhancers) {
   if (typeof enhancers == 'function') {
@@ -52,21 +67,23 @@ function createStore(reducer, preloadState, enhancers) {
 }
 
 function middelware(...middelwares) {
-  return function (createStore) {
+  return function middelwareStore(createStore) {
     return function (...args) {
+      console.log('mmmmm');
       const store = createStore(...args);
       const middelwareAPI = {
         //  / getState: store.getState,
         // dispatch: (...args) => {
         //   console.log('----',args);
-        //   // return dispatch(...args);
+        //   // return dispatch(...args)
         // },
       };
 
       const chain = middelwares.map((middelware) => {
-        return middelware();
+        return middelware(middelwareAPI);
       });
       const dispatch = compose(...chain)(store.dispatch);
+
       // middelwares = middelwares.slice();
       // middelwares.reverse();
 
@@ -81,11 +98,32 @@ function middelware(...middelwares) {
   };
 }
 
-let store = createStore(counterReducer, 0, middelware(logger, crashReport));
+let store = createStore(
+  counterReducer,
+  0,
+  compose(middelware(logger), monitorReducerEnhancer)
+);
 
 store.subscribe(() => {
   console.log('State:', store.getState());
 });
+
+function monitorReducerEnhancer(store) {
+  return function monitoredReducernnnn(reducer, initialState, enhancer) {
+    function monitoredReducer(state, action) {
+      const round = (number) => Math.round(number * 100) / 100;
+      const start = performance.now();
+      const newState = reducer(state, action);
+      const end = performance.now();
+      const diff = round(end - start);
+
+      console.log('reducer process time:', diff);
+
+      return newState;
+    }
+    return createStore(monitoredReducer, initialState, enhancer);
+  };
+}
 
 // function logger(store) {
 //   let next = store.dispatch;
@@ -98,7 +136,7 @@ store.subscribe(() => {
 function logger() {
   return function loggerDispatch(next) {
     return function loggerAction(action) {
-      console.log('dispatching:', action);
+      console.log(action);
       let res = next(action);
       return res;
     };
@@ -120,7 +158,6 @@ function logger() {
 function crashReport() {
   return function crashReportDispatch(next) {
     return function crashReportAction(action) {
-      // console.log(action);
       try {
         return next(action);
       } catch (err) {
